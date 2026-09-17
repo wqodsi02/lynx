@@ -1,0 +1,112 @@
+/* ============================================================
+   LYNX — Design tokens
+   Default = tema scuro. [data-theme="light"] sovrascrive le stesse
+   variabili. Il toggle (js/theme.js) applica l'attributo su <html>
+   prima del paint (script inline in index.html).
+   Identità: console industriale moderna — fondo blu-carbone profondo,
+   accento teal (segnale di rete), monospace per i dati.
+   ============================================================ */
+:root,
+[data-theme="dark"] {
+  --bg-app: #0a0e13;
+  --bg-panel: #0f141b;
+  --bg-panel-2: #131a22;
+  --bg-elevated: #182029;
+  --bg-hover: #1f2933;
+  --border: #263140;
+  --border-soft: #1b232e;
+  --text-primary: #e8edf2;
+  --text-secondary: #9aa7b4;
+  --text-muted: #64707d;
+  --accent: #2fc6ac;
+  --accent-strong: #35e0c2;
+  --accent-soft: rgba(47, 198, 172, 0.13);
+  --accent-2: #4d8bf0;
+  --grad-accent: linear-gradient(135deg, #2fc6ac 0%, #3b82d6 100%);
+  --success: #3ecf8e;
+  --danger: #f0554d;
+  --warning: #f0b94d;
+  --shadow: rgba(2, 6, 12, 0.5);
+  --code-bg: #0a0e13;
+  --scrollbar: #263140;
+  --glow: 0 0 18px rgba(47, 198, 172, 0.22);
+  --font-ui: "Segoe UI Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "Cascadia Code", "JetBrains Mono", "SF Mono", Consolas, "Liberation Mono", monospace;
+}
+
+[data-theme="light"] {
+  --bg-app: #f3f5f7;
+  --bg-panel: #ffffff;
+  --bg-panel-2: #eef1f4;
+  --bg-elevated: #ffffff;
+  --bg-hover: #e8ecf0;
+  --border: #dbe1e8;
+  --border-soft: #e9edf1;
+  --text-primary: #16202a;
+  --text-secondary: #55606c;
+  --text-muted: #8a939d;
+  --accent: #0e9c85;
+  --accent-strong: #0b8a76;
+  --accent-soft: rgba(14, 156, 133, 0.10);
+  --accent-2: #3672d6;
+  --grad-accent: linear-gradient(135deg, #0e9c85 0%, #3672d6 100%);
+  --success: #1f9d6c;
+  --danger: #d6433b;
+  --warning: #a97b08;
+  --shadow: rgba(24, 32, 44, 0.12);
+  --code-bg: #f5f7f9;
+  --scrollbar: #cfd6dd;
+  --glow: 0 0 14px rgba(14, 156, 133, 0.16);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg-app);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+::selection { background: var(--accent-soft); }
+
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); background-clip: content-box; }
+::-webkit-scrollbar-track { background: transparent; }
+
+button { font-family: inherit; }
+
+/* Focus visibile per la navigazione da tastiera (accessibilità di base). */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---------- Toast (notifiche non bloccanti) ---------- */
+.toast-container {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  display: flex; flex-direction: column; gap: 8px; z-index: 500; pointer-events: none;
+}
+.toast {
+  padding: 10px 18px; border-radius: 12px; font-size: 13px; font-weight: 500;
+  background: var(--bg-elevated); color: var(--text-primary);
+  border: 1px solid var(--border); box-shadow: 0 8px 28px var(--shadow);
+  opacity: 0; transform: translateY(10px);
+  transition: opacity 0.22s ease, transform 0.22s ease;
+  max-width: min(480px, 90vw);
+}
+.toast.visible { opacity: 1; transform: translateY(0); }
+.toast-success { border-color: var(--success); }
+.toast-error { border-color: var(--danger); }

@@ -1,0 +1,14 @@
+# Dipendenze di SVILUPPO e TEST.
+#
+# Deliberatamente separate da requirements.txt e requirements.lock.txt, che
+# descrivono il solo runtime dell'applicazione e costituiscono la baseline
+# riproducibile dell'articolo (tag paper-submission-baseline): quei due file
+# non vanno modificati per aggiungere strumenti di sviluppo.
+#
+# Installazione:
+#   venv_qodsi\Scripts\python.exe -m pip install -r requirements-dev.txt
+#
+# Esecuzione della suite:
+#   venv_qodsi\Scripts\python.exe -m pytest
+
+pytest==8.4.2

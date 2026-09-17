@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>LYNX — Industrial Network Intelligence</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%230f141b'/%3E%3Cg fill='none' stroke='%232fc6ac' stroke-width='1.6'%3E%3Ccircle cx='12' cy='6' r='2'/%3E%3Ccircle cx='6' cy='18' r='2'/%3E%3Ccircle cx='18' cy='18' r='2'/%3E%3Cpath d='M10.9 7.8 7.1 16.2M13.1 7.8l3.8 8.4M8 18h8'/%3E%3C/g%3E%3C/svg%3E">
+<script>
+  // Applica il tema salvato PRIMA del paint per evitare il flash bianco/nero.
+  (function(){
+    var t = localStorage.getItem("lynx-theme") || "dark";
+    document.documentElement.setAttribute("data-theme", t);
+  })();
+</script>
+<link rel="stylesheet" href="css/theme.css">
+<link rel="stylesheet" href="css/layout.css">
+<link rel="stylesheet" href="css/chat.css">
+<link rel="stylesheet" href="css/modal.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- LEFT SIDEBAR -->
+  <aside class="sidebar-left" id="sidebar-left">
+    <div class="brand"><span class="dot"></span> LYNX</div>
+    <button class="btn-new-chat" id="btn-new-chat">＋ Nuova chat</button>
+
+    <div class="sidebar-section-title">Conversazioni recenti</div>
+    <div id="sessions"></div>
+
+    <div class="sidebar-bottom">
+      <div class="sidebar-nav-item" id="btn-open-settings">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.36a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.64 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.64 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06A2 2 0 1 1 7.07 4.24l.06.06A1.7 1.7 0 0 0 9 4.64a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.36 9a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1Z"/></svg>
+        <span>Impostazioni</span>
+      </div>
+      <div class="theme-toggle">
+        <span>Tema</span>
+        <div class="theme-switch" id="theme-switch">
+          <svg class="icon-sun" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+          <div class="knob"></div>
+          <svg class="icon-moon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/></svg>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <div class="main-header">
+      <button class="icon-btn header-toggle" id="btn-toggle-left" title="Mostra/Nascondi conversazioni">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><line x1="9" y1="5" x2="9" y2="19"/></svg>
+      </button>
+
+      <div class="header-center">
+        <button class="header-tool-btn" id="btn-open-benchmark">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg>
+          Benchmark
+        </button>
+        <button class="header-tool-btn" id="btn-open-analytics">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18"/><path d="M18.4 8.6 13 14l-3-3-4 4"/></svg>
+          Analytics
+        </button>
+      </div>
+
+      <button class="icon-btn header-toggle" id="btn-toggle-right" title="Mostra/Nascondi log">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><line x1="15" y1="5" x2="15" y2="19"/></svg>
+      </button>
+    </div>
+
+    <div class="chat-scroll" id="chat-scroll">
+      <div class="chat-inner" id="chat-inner">
+        <!-- Il contenuto del welcome viene renderizzato da js/main.js
+             (renderWelcome), che gestisce anche i suggerimenti dinamici. -->
+        <div class="welcome" id="welcome"></div>
+      </div>
+    </div>
+
+    <div class="composer-wrap">
+      <div class="composer">
+        <div class="model-pill" id="model-pill"><span>Nessun modello</span></div>
+        <textarea id="q-input" rows="1" placeholder="Scrivi una domanda sui dati di rete…"></textarea>
+        <button class="btn-send" id="send-btn" title="Invia">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+        </button>
+      </div>
+      <div class="model-popover" id="model-pop" style="display:none"></div>
+      <div class="composer-hint">Invio per inviare · Shift+Invio per andare a riga nuova</div>
+    </div>
+  </main>
+
+  <!-- RIGHT SIDEBAR — LOGS -->
+  <aside class="sidebar-right" id="sidebar-right">
+    <div class="log-tabs">
+      <div class="log-tab active" data-tab="session">Log sessione</div>
+      <div class="log-tab" data-tab="benchmark">Log benchmark</div>
+    </div>
+    <div class="log-list active" id="log-list-session"></div>
+    <div class="log-list" id="log-list-benchmark"></div>
+  </aside>
+</div>
+
+<!-- LOG VIEWER MODAL -->
+<div class="modal-overlay hidden" id="log-modal-overlay">
+  <div class="modal modal-wide">
+    <div class="modal-header"><h3>Visualizzatore log</h3>
+      <button class="modal-close" id="log-modal-close">✕</button></div>
+    <div class="modal-body"><pre id="log-modal-content" style="white-space:pre-wrap;font-size:12px;font-family:monospace"></pre></div>
+    <div class="modal-footer"><button class="btn-action primary" id="log-modal-download">⬇ Scarica</button></div>
+  </div>
+</div>
+
+<!-- SETTINGS MODAL -->
+<div class="modal-overlay hidden" id="settings-modal-overlay">
+  <div class="modal" id="settings-modal">
+    <div class="modal-header"><h3>Impostazioni</h3>
+      <button class="modal-close" id="settings-modal-close">✕</button></div>
+    <div class="modal-tabs">
+      <div class="modal-tab active" data-tab="models">Modelli</div>
+      <div class="modal-tab" data-tab="db">Database</div>
+    </div>
+    <div class="modal-body">
+      <!-- MODELS TAB -->
+      <div class="modal-tab-content active" data-tab="models">
+        <div id="models-list"></div>
+        <div class="field-group"><label>Nome</label><input id="new-name" placeholder="es. Llama 3.3 70B"></div>
+        <div class="field-group"><label>Provider</label>
+          <select id="new-prov"><option value="groq">Groq</option><option value="gemini">Google Gemini</option></select>
+        </div>
+        <div class="field-group"><label>Identificativo modello</label><input id="new-mstr" placeholder="es. llama-3.3-70b-versatile"></div>
+        <div class="field-group"><label>API key</label><input id="new-key" type="password" placeholder="API key"></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn-action primary" id="model-form-submit">Aggiungi modello</button>
+          <button class="btn-action" id="model-form-cancel">Annulla modifica</button>
+        </div>
+      </div>
+      <!-- DB TAB -->
+      <div class="modal-tab-content" data-tab="db">
+        <div class="field-group"><label>Host</label><input id="db-host"></div>
+        <div class="field-group"><label>Porta</label><input id="db-port"></div>
+        <div class="field-group"><label>Nome database</label><input id="db-name"></div>
+        <div class="field-group"><label>Utente</label><input id="db-user"></div>
+        <div class="field-group"><label>Password</label><input id="db-password" type="password" placeholder="(lascia vuoto per non modificare)"></div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn-action primary" id="db-save">Salva</button>
+          <button class="btn-action" id="db-test">Verifica connessione</button>
+          <span class="status-pill pending" id="db-pill">—</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- BENCHMARK MODAL -->
+<div class="modal-overlay hidden" id="benchmark-modal-overlay">
+  <div class="modal modal-wide" id="benchmark-modal">
+    <div class="modal-header"><h3>Benchmark multi-modello</h3>
+      <button class="modal-close" id="benchmark-modal-close">✕</button></div>
+    <div class="modal-tabs">
+      <div class="modal-tab active" data-tab="oneshot">Domanda singola</div>
+      <div class="modal-tab" data-tab="conversational">Scenario conversazionale</div>
+    </div>
+    <div class="modal-body">
+      <div class="modal-tab-content active" data-tab="oneshot">
+        <div class="field-group"><label>Domanda</label><textarea id="bench-question" rows="2"></textarea></div>
+        <div class="field-group"><label>Modelli da confrontare</label><div id="bench-models"></div></div>
+        <button class="btn-action primary" id="bench-run">▶ Esegui benchmark</button>
+        <div id="bench-result" style="margin-top:14px"></div>
+      </div>
+      <div class="modal-tab-content" data-tab="conversational">
+        <div class="field-group">
+          <label>Domande della conversazione simulata (in ordine)</label>
+          <div id="scenario-rows"></div>
+          <button class="icon-btn" id="scenario-add-row" style="margin-top:6px">＋ Aggiungi turno</button>
+        </div>
+        <div class="field-group"><label>Modelli da confrontare</label><div id="bench-conv-models"></div></div>
+        <button class="btn-action primary" id="bench-conv-run">▶ Esegui scenario</button>
+        <div id="bench-conv-result" style="margin-top:14px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ANALYTICS MODAL -->
+<div class="modal-overlay hidden" id="analytics-modal-overlay">
+  <div class="modal modal-wide">
+    <div class="modal-header"><h3>Analytics</h3>
+      <button class="modal-close" id="analytics-modal-close">✕</button></div>
+    <div class="modal-body" id="analytics-body"></div>
+  </div>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

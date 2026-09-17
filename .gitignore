@@ -1,0 +1,13 @@
+.env
+data/secret.key
+data/models.json
+logs/*.txt
+logs/benchmark/*.txt
+__pycache__/
+*.pyc
+venv/
+.venv/
+venv_qodsi/
+
+# Documento di lavoro sull'architettura: resta in locale.
+CONTESTO.md
