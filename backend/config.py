@@ -87,6 +87,11 @@ class Settings:
     # Pausa (secondi) tra un modello e il successivo nei benchmark, per non
     # esaurire i limiti TPM condivisi del provider (errori 429 a catena).
     BENCHMARK_MODEL_DELAY_S = int(os.getenv("BENCHMARK_MODEL_DELAY_S", "12"))
+    # Soglie di escalation per i fallimenti di persistenza su query_log: un
+    # fallimento "indeterminato" (tipicamente in fase di connessione) diventa
+    # un allarme grave quando supera una delle due, quella che arriva prima.
+    PERSISTENZA_FALLIMENTI_PER_ALLARME = int(os.getenv("PERSISTENZA_FALLIMENTI_PER_ALLARME", "5"))
+    PERSISTENZA_MINUTI_PER_ALLARME = int(os.getenv("PERSISTENZA_MINUTI_PER_ALLARME", "10"))
     CONVERSATION_MAX_TURNS = int(os.getenv("CONVERSATION_MAX_TURNS", "20"))
     CONVERSATION_TTL_MINUTES = int(os.getenv("CONVERSATION_TTL_MINUTES", "240"))
     DEBUG = os.getenv("FLASK_DEBUG", "false").lower() == "true"

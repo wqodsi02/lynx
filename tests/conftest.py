@@ -13,6 +13,7 @@ ma va tenuto presente su una macchina pulita o in CI.
 """
 import pytest
 
+from backend import persistence_state
 from backend.services import conversation_service as conv
 
 
@@ -29,3 +30,16 @@ def reset_conversation_state():
     conv._sessions.clear()
     yield
     conv._sessions.clear()
+
+
+@pytest.fixture(autouse=True)
+def reset_persistence_state():
+    """Azzera lo stato di persistenza prima e dopo ogni test.
+
+    Stessa ragione della fixture qui sopra: `persistence_state` tiene contatori
+    a livello di modulo, e senza azzeramento un test che registra un fallimento
+    lascerebbe il contatore sporco per quelli successivi.
+    """
+    persistence_state.azzera()
+    yield
+    persistence_state.azzera()
