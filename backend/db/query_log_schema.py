@@ -7,8 +7,23 @@ import threading
 from contextlib import contextmanager
 
 from .connection import get_connection
+from .. import persistence_state
 
 logger = logging.getLogger("lynx.db")
+
+
+class SchemaIncompleteError(Exception):
+    """Lo schema di query_log non ha tutte le colonne che il codice usa.
+
+    Sollevata dalla verifica che segue la migrazione, porta con sé l'elenco
+    completo delle colonne mancanti: è il punto in cui un guasto che altrimenti
+    si manifesterebbe molto dopo — al primo INSERT, con un errore che sembra
+    non correlato — viene reso esplicito subito.
+    """
+
+    def __init__(self, messaggio, colonne_mancanti=()):
+        super().__init__(messaggio)
+        self.colonne_mancanti = list(colonne_mancanti)
 
 # Ogni colonna che il codice applicativo nomina DEVE stare qui dentro, non solo
 # nel CREATE TABLE: su un database dove query_log esiste gia' il CREATE e' un
@@ -68,9 +83,10 @@ _schema_ready = False
 _schema_lock = threading.Lock()
 
 
-def _ensure_log_table(conn):
-    cur = conn.cursor()
-    cur.execute("""
+# La CREATE TABLE sta in una costante e non inline, cosi' `_colonne_del_create`
+# puo' ricavarne i nomi delle colonne: l'insieme atteso dalla verifica non e'
+# una terza lista da tenere allineata a mano, si deriva dalle due che esistono.
+_CREATE_TABLE_SQL = """
         CREATE TABLE IF NOT EXISTS query_log (
             id              SERIAL PRIMARY KEY,
             session_id      TEXT,
@@ -91,13 +107,62 @@ def _ensure_log_table(conn):
             log_filename    TEXT,
             error           TEXT
         )
-    """)
+"""
+
+
+def _colonne_del_create():
+    """Nomi di colonna dichiarati nella CREATE TABLE."""
+    corpo = _CREATE_TABLE_SQL[_CREATE_TABLE_SQL.index("(") + 1:_CREATE_TABLE_SQL.rindex(")")]
+    nomi = []
+    for riga in corpo.split("\n"):
+        riga = riga.strip()
+        if riga:
+            nomi.append(riga.split()[0])
+    return nomi
+
+
+def colonne_richieste():
+    """Tutte le colonne che il codice si aspetta di trovare su query_log.
+
+    Unione di CREATE TABLE e _COLUMNS_DDL: la prima serve a chi parte da
+    database vuoto, la seconda e' l'unico modo di aggiungere colonne a una
+    tabella preesistente.
+    """
+    return set(_colonne_del_create()) | {nome for nome, _tipo in _COLUMNS_DDL}
+
+
+def verify_schema(conn):
+    """Colonne attese ma non presenti sul database, in ordine alfabetico.
+
+    Lista vuota significa schema completo. Si interroga information_schema
+    invece di fidarsi dell'esito degli ALTER, perche' un ALTER fallito viene
+    inghiottito per non interrompere gli altri: l'unica verita' e' cosa c'e'
+    davvero nella tabella.
+    """
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name = 'query_log'")
+        reali = {riga[0] for riga in cur.fetchall()}
+    finally:
+        cur.close()
+    return sorted(colonne_richieste() - reali)
+
+
+def _ensure_log_table(conn):
+    cur = conn.cursor()
+    cur.execute(_CREATE_TABLE_SQL)
     conn.commit()
     for col, typedef in _COLUMNS_DDL:
         try:
             cur.execute(f"ALTER TABLE query_log ADD COLUMN IF NOT EXISTS {col} {typedef}")
             conn.commit()
-        except Exception:
+        except Exception as e:
+            # Il try/except per-ALTER resta: un fallimento non deve fermare gli
+            # altri. Cambia solo che ora lascia una traccia — prima il segnale
+            # era zero e il guasto si scopriva molto dopo, all'INSERT.
+            logger.warning("ALTER TABLE query_log ADD COLUMN %s non riuscito (%s): %s",
+                           col, type(e).__name__, e)
             # Rollback esplicito: senza, la transazione resta abortita e
             # TUTTI gli statement successivi fallirebbero.
             conn.rollback()
@@ -106,9 +171,21 @@ def _ensure_log_table(conn):
         cur.execute("CREATE INDEX IF NOT EXISTS idx_query_log_model ON query_log (model)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_query_log_session ON query_log (session_id)")
         conn.commit()
-    except Exception:
+    except Exception as e:
+        logger.warning("Creazione degli indici di query_log non riuscita (%s): %s",
+                       type(e).__name__, e)
         conn.rollback()
     cur.close()
+
+    # Verifica: e' qui che un guasto altrimenti silenzioso diventa esplicito.
+    mancanti = verify_schema(conn)
+    if mancanti:
+        raise SchemaIncompleteError(
+            "Schema di query_log incompleto: mancano le colonne %s. "
+            "Gli ALTER TABLE non sono riusciti ad aggiungerle (permessi "
+            "insufficienti? transazione in sola lettura?). Finche' mancano, "
+            "OGNI scrittura su query_log fallira'." % ", ".join(mancanti),
+            colonne_mancanti=mancanti)
 
 
 def ensure_schema_once(conn):
@@ -121,10 +198,18 @@ def ensure_schema_once(conn):
             return
         try:
             _ensure_log_table(conn)
-            _schema_ready = True
+        except SchemaIncompleteError as e:
+            # Non si imposta _schema_ready: la migrazione verra' ritentata alla
+            # prossima richiesta. E' l'auto-recupero che ha fatto passare da
+            # solo l'ALTER di log_filename quando la VPN e' tornata.
+            persistence_state.registra_schema(False, e.colonne_mancanti)
+            logger.error("%s", e)
+            raise
         except Exception as e:
             logger.warning("Impossibile garantire lo schema di query_log: %s", e)
             raise
+        persistence_state.registra_schema(True, [])
+        _schema_ready = True
 
 
 @contextmanager

@@ -50,22 +50,6 @@ from backend.services import logging_service
 # ---------------------------------------------------------------------------
 # Estrazione dallo schema
 # ---------------------------------------------------------------------------
-def _colonne_del_create_table():
-    """Nomi di colonna dichiarati nel CREATE TABLE di `_ensure_log_table`."""
-    sorgente = inspect.getsource(query_log_schema._ensure_log_table)
-    inizio = sorgente.index("CREATE TABLE IF NOT EXISTS query_log (")
-    corpo = re.search(r"\((.*?)\n\s*\)", sorgente[inizio:], re.S).group(1)
-    colonne = []
-    for riga in corpo.split("\n"):
-        riga = riga.strip()
-        if not riga:
-            continue
-        m = re.match(r"([a-zA-Z_][a-zA-Z0-9_]*)", riga)
-        if m:
-            colonne.append(m.group(1))
-    return colonne
-
-
 # `id` e' l'unica colonna deliberatamente assente da _COLUMNS_DDL, e va quindi
 # esclusa dai controlli: e' SERIAL PRIMARY KEY, e un ALTER TABLE ADD COLUMN che
 # la aggiungesse a una tabella che una primary key ce l'ha gia' fallirebbe. Su
@@ -77,12 +61,6 @@ _COLONNE_STRUTTURALI = frozenset({"id"})
 def _colonne_degli_alter():
     """Nomi di colonna che la migrazione sa aggiungere a una tabella esistente."""
     return [nome for nome, _tipo in query_log_schema._COLUMNS_DDL]
-
-
-def _colonne_creabili():
-    """Unione: tutto cio' che lo schema sa produrre, su installazione nuova o
-    gia' esistente."""
-    return set(_colonne_del_create_table()) | set(_colonne_degli_alter())
 
 
 # ---------------------------------------------------------------------------

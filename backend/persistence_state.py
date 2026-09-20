@@ -105,6 +105,10 @@ def _stato_iniziale():
         "ultimo_successo": None,
         "primo_fallimento": None,        # riferimento quando non c'è mai stato un successo
         "segnalato": False,              # diritto di segnalazione già consumato
+        # None = schema mai verificato. Affermare che va bene senza aver
+        # guardato sarebbe la stessa bugia del NULL scambiato per zero.
+        "schema_ok": None,
+        "colonne_mancanti": [],
     }
 
 
@@ -147,6 +151,18 @@ def registra_fallimento(eccezione) -> str:
         _stato["ultimo_errore"] = str(eccezione)
         _stato["fallimenti_consecutivi"] += 1
     return classificazione
+
+
+def registra_schema(ok: bool, colonne_mancanti=()):
+    """Esito dell'ultima verifica dello schema di query_log.
+
+    Permette all'indicatore di stato di dire non solo "rotto", ma "rotto
+    perché mancano queste colonne" — che è la differenza fra un allarme e una
+    diagnosi.
+    """
+    with _lock:
+        _stato["schema_ok"] = bool(ok)
+        _stato["colonne_mancanti"] = list(colonne_mancanti)
 
 
 def deve_segnalare() -> bool:
