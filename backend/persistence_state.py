@@ -217,6 +217,25 @@ def _e_grave():
     return (time.time() - riferimento) > settings.PERSISTENZA_MINUTI_PER_ALLARME * 60
 
 
+def per_api() -> dict:
+    """Vista dello stato destinata alle risposte HTTP.
+
+    Forma unica per /api/health, /api/history e /api/analytics: chi la consuma
+    la impara una volta sola. `primo_fallimento` resta fuori — e' un dettaglio
+    interno del calcolo dell'escalation.
+    """
+    s = istantanea()
+    return {
+        "ok": s["ok"],
+        "grave": s["grave"],
+        "classificazione": s["classificazione"],
+        "errore": s["ultimo_errore"],
+        "fallimenti_consecutivi": s["fallimenti_consecutivi"],
+        "schema_ok": s["schema_ok"],
+        "colonne_mancanti": s["colonne_mancanti"],
+    }
+
+
 def istantanea() -> dict:
     """Copia dello stato corrente, con `grave` calcolato al momento."""
     with _lock:

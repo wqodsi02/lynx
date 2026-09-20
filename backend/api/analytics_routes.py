@@ -1,5 +1,6 @@
 from flask import Blueprint, jsonify
 
+from .. import persistence_state
 from ..db.query_log_schema import log_table_cursor
 
 bp = Blueprint("analytics", __name__, url_prefix="/api/analytics")
@@ -12,9 +13,18 @@ def get_analytics():
     # tutte precedenti alla misurazione dei transfer rate riporterebbe 0,
     # affermando una misura mai fatta. SUM ignora i NULL, quindi sui modelli
     # misti continua a sommare solo le righe effettivamente misurate.
+    #
+    # Ogni interrogazione ha il proprio try: se ne cade una, le altre arrivano
+    # comunque. Meta' pannello e' meglio di niente, purche' sia dichiarato che
+    # e' meta' — e qui si risponde 200 con il motivo, perche' un 500 non
+    # distingue "rotto" da "vuoto", che e' l'ambiguita' dietro a tre mesi di
+    # guasto invisibile.
+    dati = {"by_model": [], "by_category": [], "top_questions": [], "daily": []}
+    guasto = None
     try:
         with log_table_cursor(dict_rows=True) as (conn, cur):
-            cur.execute("""
+            try:
+                cur.execute("""
                 SELECT
                     model, provider,
                     COUNT(*) AS total_queries,
@@ -45,29 +55,57 @@ def get_analytics():
                 GROUP BY model, provider
                 ORDER BY total_queries DESC
             """)
-            by_model = [dict(r) for r in cur.fetchall()]
-
-            cur.execute("""
+                dati["by_model"] = [dict(r) for r in cur.fetchall()]
+            except Exception as e:
+                guasto = e
+                # Senza rollback la transazione resta abortita e le
+                # interrogazioni successive fallirebbero a cascata: il
+                # recupero parziale sarebbe solo apparente.
+                conn.rollback()
+            try:
+                cur.execute("""
                 SELECT category, COUNT(*) AS count
                 FROM query_log WHERE category IS NOT NULL
                 GROUP BY category ORDER BY count DESC
             """)
-            by_category = [dict(r) for r in cur.fetchall()]
-
-            cur.execute("""
+                dati["by_category"] = [dict(r) for r in cur.fetchall()]
+            except Exception as e:
+                guasto = e
+                # Senza rollback la transazione resta abortita e le
+                # interrogazioni successive fallirebbero a cascata: il
+                # recupero parziale sarebbe solo apparente.
+                conn.rollback()
+            try:
+                cur.execute("""
                 SELECT question, COUNT(*) AS count
                 FROM query_log GROUP BY question ORDER BY count DESC LIMIT 10
             """)
-            top_questions = [dict(r) for r in cur.fetchall()]
-
-            cur.execute("""
+                dati["top_questions"] = [dict(r) for r in cur.fetchall()]
+            except Exception as e:
+                guasto = e
+                # Senza rollback la transazione resta abortita e le
+                # interrogazioni successive fallirebbero a cascata: il
+                # recupero parziale sarebbe solo apparente.
+                conn.rollback()
+            try:
+                cur.execute("""
                 SELECT DATE(timestamp) AS day, COUNT(*) AS queries
                 FROM query_log WHERE timestamp > NOW() - INTERVAL '14 days'
                 GROUP BY day ORDER BY day
             """)
-            daily = [dict(r) for r in cur.fetchall()]
-
-        return jsonify({"by_model": by_model, "by_category": by_category,
-                        "top_questions": top_questions, "daily": daily})
+                dati["daily"] = [dict(r) for r in cur.fetchall()]
+            except Exception as e:
+                guasto = e
+                # Senza rollback la transazione resta abortita e le
+                # interrogazioni successive fallirebbero a cascata: il
+                # recupero parziale sarebbe solo apparente.
+                conn.rollback()
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        guasto = e
+
+    if guasto is not None:
+        persistence_state.registra_fallimento(guasto)
+    # Una lettura riuscita NON prova che le scritture funzionino, quindi non
+    # si registra alcun successo: lo stato lo azzera chi scrive davvero.
+    dati["persistenza"] = persistence_state.per_api()
+    return jsonify(dati)

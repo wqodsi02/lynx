@@ -9,7 +9,7 @@ from flask import Flask, jsonify, send_from_directory
 from flask.json.provider import DefaultJSONProvider
 from flask_cors import CORS
 
-from . import json_encoding
+from . import json_encoding, persistence_state
 from .config import settings
 from .llm.base import LLMProviderError
 from .api import models_routes, db_routes, query_routes, benchmark_routes, analytics_routes, misc_routes
@@ -79,7 +79,12 @@ def create_app():
 
     @app.route("/api/health", methods=["GET"])
     def health():
-        return jsonify({"status": "ok", "service": "LYNX backend"})
+        # VINCOLO: questa rotta non apre connessioni al database. Con
+        # connect_timeout=8 su VPN instabile, un health check che si blocca
+        # otto secondi e' peggio che inutile. Lo stato di persistenza viene
+        # letto dalla cache in-process, aggiornata da chi scrive davvero.
+        return jsonify({"status": "ok", "service": "LYNX backend",
+                        "persistenza": persistence_state.per_api()})
 
     @app.errorhandler(LLMProviderError)
     def llm_error(e):

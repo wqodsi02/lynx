@@ -76,9 +76,15 @@ def _insert_di_save_to_db_log():
 
 
 def _sql_della_funzione(funzione):
-    """Tutte le stringhe SQL passate a cur.execute() dentro una funzione."""
+    """Tutte le stringhe SQL triple-quoted dentro una funzione.
+
+    Si cercano i blocchi """ + '"""' + """...""" + '"""' + """ e non le chiamate a cur.execute(...):
+    legarsi alla sintassi di chiamata rendeva il controllo fragile, e una
+    riscrittura che avvolgesse le query in un ciclo avrebbe fatto passare
+    questi test A VUOTO, senza trovare piu' alcuna colonna da verificare.
+    """
     sorgente = inspect.getsource(funzione)
-    return re.findall(r'cur\.execute\(\s*"""(.*?)"""', sorgente, re.S)
+    return re.findall(r'"""(.*?)"""', sorgente, re.S)
 
 
 # Parole che nelle query non sono nomi di colonna: keyword SQL, funzioni,
@@ -130,8 +136,10 @@ def test_history_usa_solo_colonne_che_lo_schema_sa_creare():
     """/api/history proietta esplicitamente le colonne: se una non esiste, la
     rotta risponde 500 invece della cronologia."""
     creabili_da_alter = set(_colonne_degli_alter())
+    sql_trovate = _sql_della_funzione(misc_routes.get_history)
+    assert sql_trovate, "nessuna SQL trovata: il test non sta verificando nulla"
     referenziate = set()
-    for sql in _sql_della_funzione(misc_routes.get_history):
+    for sql in sql_trovate:
         referenziate |= _colonne_referenziate(sql)
     mancanti = sorted(c for c in referenziate
                       if c not in creabili_da_alter and c not in _COLONNE_STRUTTURALI)
@@ -142,8 +150,10 @@ def test_history_usa_solo_colonne_che_lo_schema_sa_creare():
 
 def test_analytics_usa_solo_colonne_che_lo_schema_sa_creare():
     creabili_da_alter = set(_colonne_degli_alter())
+    sql_trovate = _sql_della_funzione(analytics_routes.get_analytics)
+    assert sql_trovate, "nessuna SQL trovata: il test non sta verificando nulla"
     referenziate = set()
-    for sql in _sql_della_funzione(analytics_routes.get_analytics):
+    for sql in sql_trovate:
         referenziate |= _colonne_referenziate(sql)
     mancanti = sorted(c for c in referenziate
                       if c not in creabili_da_alter and c not in _COLONNE_STRUTTURALI)

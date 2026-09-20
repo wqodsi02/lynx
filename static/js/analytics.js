@@ -15,6 +15,28 @@ export async function loadAnalytics() {
   }
 }
 
+/** Fascia di avviso quando la persistenza e' rotta.
+ *
+ *  Analytics e' il punto in cui il guasto si e' nascosto per tre mesi: mostrava
+ *  POCHI DATI invece di DATI MANCANTI, e a occhio le due cose sono identiche.
+ *  La guardia sull'assenza del campo non e' difensivismo: un browser con il JS
+ *  in cache riceve risposte senza `persistenza`, e il pannello deve reggere.
+ */
+function fasciaPersistenza(p) {
+  if (!p || p.ok !== false) return "";
+  const dettaglio = p.colonne_mancanti && p.colonne_mancanti.length
+    ? `Colonne mancanti su query_log: ${p.colonne_mancanti.join(", ")}.`
+    : (p.errore || "");
+  return `
+    <div class="analytics-card" style="border-left:3px solid var(--danger)">
+      <h4 style="color:var(--danger)">I dati qui sotto sono incompleti</h4>
+      <p>La scrittura su database non sta funzionando${p.classificazione ? ` (${esc(p.classificazione)})` : ""}:
+         le esecuzioni recenti potrebbero non essere state registrate.
+         ${p.fallimenti_consecutivi ? `${p.fallimenti_consecutivi} fallimenti consecutivi.` : ""}</p>
+      <p style="font-size:12px;color:var(--text-muted)">${esc(dettaglio)}</p>
+    </div>`;
+}
+
 function renderAnalytics(data) {
   const modelRows = (data.by_model || []).map((m) => `
     <tr>
@@ -30,6 +52,7 @@ function renderAnalytics(data) {
   const topRows = (data.top_questions || []).map((q) => `<tr><td>${esc(q.question)}</td><td>${q.count}</td></tr>`).join("");
 
   return `
+    ${fasciaPersistenza(data.persistenza)}
     <div class="analytics-card">
       <h4>Confronto modelli — latenze (ms), token, byte trasferiti, accuratezza SQL (ok/ko/parziale)</h4>
       <div style="overflow-x:auto">

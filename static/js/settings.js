@@ -154,7 +154,16 @@ export async function testDbConnection() {
   try {
     const d = await api.testDb();
     pill.textContent = d.message;
-    pill.className = `status-pill ${d.status === "ok" ? "ok" : "error"}`;
+    // Una connessione riuscita con lo schema incompleto NON e' "tutto a posto":
+    // e' esattamente lo stato in cui l'applicazione e' rimasta per tre mesi
+    // senza che nessuno se ne accorgesse. Il pill deve dirlo.
+    let classe = d.status === "ok" ? "ok" : "error";
+    if (d.schema_ok === false) {
+      classe = "error";
+      const mancanti = (d.colonne_mancanti || []).join(", ");
+      pill.textContent = `Schema di query_log incompleto: mancano ${mancanti}`;
+    }
+    pill.className = `status-pill ${classe}`;
   } catch (e) {
     pill.textContent = e.message;
     pill.className = "status-pill error";

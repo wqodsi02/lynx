@@ -3,6 +3,7 @@ import io
 
 from flask import Blueprint, Response, jsonify, request, send_from_directory
 
+from .. import persistence_state
 from ..config import BENCHMARK_DIR, LOGS_DIR
 from ..db.query_log_schema import log_table_cursor
 from ..services import logging_service as logsvc
@@ -64,6 +65,10 @@ def get_history():
         limit = min(int(request.args.get("limit", 50)), 200)
     except (TypeError, ValueError):
         limit = 50
+    # 200 anche quando la persistenza e' rotta, con il motivo: un 500 non
+    # distingue "il sistema e' rotto" da "non ci sono dati", ed e' l'ambiguita'
+    # che ha tenuto nascosto il guasto per tre mesi.
+    righe = []
     try:
         with log_table_cursor(dict_rows=True) as (conn, cur):
             cur.execute("""
@@ -75,10 +80,10 @@ def get_history():
                 FROM query_log WHERE is_benchmark IS NOT TRUE
                 ORDER BY timestamp DESC LIMIT %s
             """, (limit,))
-            rows = [dict(r) for r in cur.fetchall()]
-        return jsonify(rows)
+            righe = [dict(r) for r in cur.fetchall()]
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        persistence_state.registra_fallimento(e)
+    return jsonify({"rows": righe, "persistenza": persistence_state.per_api()})
 
 
 @bp.route("/suggestions", methods=["GET"])
