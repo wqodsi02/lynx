@@ -36,6 +36,75 @@ generico costerebbe più di quanto farebbe risparmiare.
 
 ## Risolti
 
+### Soppressione degli errori — risolto il 2026-09-20
+
+Un fallimento di persistenza completo era passato inosservato per **tre mesi e
+165 esecuzioni**, e non per sfortuna: tre livelli di soppressione sovrapposti
+rendevano il guasto indistinguibile dal normale funzionamento. Il segnale
+c'era — un `logger.warning` in `save_to_db_log` — ma era identico ogni volta e
+non diceva né di che genere fosse il problema né da quanto durasse.
+
+**Quattro tappe, quattro commit:**
+
+- `9f94e55` — classificazione dei fallimenti e stato
+- `60f73c9` — verifica dello schema dopo la migrazione
+- `8cfd6fe` — visibilità nella console e nei file `.txt`
+- `7b7c569` — indicatore di stato ed endpoint
+
+**Cosa è cambiato.**
+
+*Classificazione.* Tre categorie invece di due. Strutturale (schema, permessi,
+transazione read-only) e transitorio (connessione caduta, timeout) sono certi;
+la terza, `indeterminato`, copre i fallimenti in fase di connessione ed è una
+zona grigia **dichiarata**, non un ripiego: `psycopg2.connect()` solleva
+`OperationalError` sia per la VPN caduta sia per la password sbagliata, e il
+testo del messaggio dipende da versione e lingua di libpq. Per gli
+indeterminati vale un'escalation a soglia (5 fallimenti o 10 minuti,
+configurabili): è la regola che avrebbe intercettato il guasto originale
+**anche sbagliando la classificazione**.
+
+*Verifica dello schema.* Dopo il ciclo di `ALTER` si interroga
+`information_schema.columns` e si confrontano le colonne reali con l'unione di
+`CREATE TABLE` e `_COLUMNS_DDL`. È il pezzo di maggior valore: converte
+«l'`INSERT` fallisce molto dopo con un errore che sembra non correlato» in «la
+migrazione fallisce adesso e dice quali colonne mancano», tutte insieme.
+
+*Visibilità.* Primo fallimento a ERROR con genere, eccezione e dove guardare;
+ripetizioni in silenzio; riemersione periodica; ripristino a INFO **con il
+conteggio** dei fallimenti assorbiti. Nei `.txt`, blocco `[ PERSISTENZA DB ]` e
+`Log ID : NON SALVATO SU DATABASE` al posto di un `N/A` che si leggeva come
+«non applicabile». `update_log_filename` da DEBUG a WARNING.
+
+*Endpoint.* `/api/health` espone lo stato **senza toccare il database**;
+`/api/db/test` verifica anche lo schema; `/api/history` e `/api/analytics`
+passano da 500 a 200 con il motivo e i dati recuperabili. Analytics era il
+punto in cui il guasto si nascondeva: mostrava *pochi dati* invece di *dati
+mancanti*, e a occhio le due cose sono identiche.
+
+**Cosa resta deliberatamente invariato, e perché.** Sono le protezioni che
+hanno tenuto l'applicazione usabile per tre mesi con la persistenza rotta:
+
+- **`save_to_db_log` continua a ingoiare ogni eccezione e a restituire
+  `None`.** Il difetto non era che catturasse, ma che nessuno sapesse che
+  aveva catturato. Un fallimento di persistenza non deve mai far fallire la
+  risposta all'utente, e il log su file resta l'ultima rete di sicurezza.
+- **Il `conn.rollback()` dentro i 14 `except` sugli `ALTER`.** Senza, la
+  transazione resta abortita e *tutti* gli statement successivi falliscono a
+  cascata. Il try/except per-`ALTER` resta per la stessa ragione: un
+  fallimento non deve fermare gli altri tredici. È cambiato solo che ora
+  lasciano una traccia.
+- **`_schema_ready` non impostato in caso di errore**, quindi la migrazione
+  viene ritentata a ogni richiesta. È l'auto-recupero che ha fatto passare da
+  solo l'`ALTER` di `log_filename` quando la VPN è tornata, senza riavviare
+  l'applicazione.
+- **`save_log_file` non dipende dal database** e viene chiamata su ogni
+  percorso, compresi i rami d'errore.
+
+**Una scelta non ovvia**: `update_log_filename` ora logga, ma **non** viene
+contato fra i fallimenti di persistenza. Lì la riga su `query_log` esiste ed è
+solo rimasta senza il nome del file — record degradato, non perso — e contarlo
+gonfierebbe il contatore che pilota l'escalation.
+
 ### Misurazione dei transfer rate — risolto il 2026-09-10
 
 Requisito esplicito del relatore (punto 4), mai strumentato prima. I byte
@@ -170,30 +239,6 @@ espresso), `error` (nessun errore) e `benchmark_run_id` (non è un benchmark):
 tutte legittime.
 
 ## Difetti noti
-
-### Soppressione degli errori: un guasto totale rimasto invisibile
-
-Un fallimento di persistenza completo è passato inosservato per **tre mesi e
-165 esecuzioni**, e non per sfortuna: ci sono tre livelli di soppressione
-sovrapposti.
-
-1. `save_to_db_log` cattura ogni eccezione, emette un `logger.warning` e
-   restituisce `None`.
-2. I chiamanti — `query_routes.py` e `benchmark_service.py` — **ignorano quel
-   `None`**: lo passano a `save_log_file`, dove diventa la stringa `"N/A"`
-   nel file di log. Nessun controllo, nessun avviso all'utente.
-3. In `query_log_schema.py` ognuno dei 14 `ALTER TABLE` ha un
-   `except Exception: conn.rollback()` **senza alcun logging**. Una colonna
-   che non viene aggiunta non produce nessun segnale: il guasto si manifesta
-   molto più tardi, all'`INSERT`, con un errore che sembra non correlato.
-
-`update_log_filename` logga a livello `DEBUG`, quindi invisibile con
-`FLASK_DEBUG=false`.
-
-**Da ripensare prima della produzione.** In un prodotto commerciale un
-fallimento di persistenza deve essere visibile, non silenzioso: il `None` va
-propagato o trasformato in un segnale che raggiunga l'utente, e gli `except`
-sugli `ALTER` devono almeno loggare cosa hanno inghiottito.
 
 ### Le 165 esecuzioni di luglio 2026 non sono recuperabili
 
