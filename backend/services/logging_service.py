@@ -8,6 +8,7 @@ import os
 import re
 from datetime import datetime
 
+from .. import persistence_state
 from ..config import LOGS_DIR, BENCHMARK_DIR
 from ..transfer import somma_byte
 from ..db.query_log_schema import log_table_cursor
@@ -20,6 +21,30 @@ def slugify(text, max_len=55):
     text = re.sub(r"[^\w\s-]", "", text)
     text = re.sub(r"[\s_]+", "_", text)
     return text[:max_len].rstrip("_") or "query"
+
+
+def _cosa_guardare(classificazione):
+    """Un rigo di indirizzo, non una diagnosi: dice dove andare a vedere."""
+    if classificazione == persistence_state.STRUTTURALE:
+        return (" Genere strutturale: non si risolve da solo. Controllare schema "
+                "e permessi con GET /api/db/test.")
+    if classificazione == persistence_state.INDETERMINATO:
+        return " Fallimento in fase di connessione: verificare la VPN."
+    return ""
+
+
+def esito_persistenza(log_id):
+    """Esito della scrittura appena tentata, nella forma attesa da
+    `save_log_file`.
+
+    Da chiamare subito dopo `save_to_db_log`, nella stessa richiesta: legge lo
+    stato aggiornato un istante prima.
+    """
+    if log_id is not None:
+        return {"ok": True}
+    s = persistence_state.istantanea()
+    return {"ok": False, "classificazione": s["classificazione"],
+            "errore": s["ultimo_errore"]}
 
 
 def save_to_db_log(session_id, model_name, provider, question, category, sql,
@@ -52,9 +77,25 @@ def save_to_db_log(session_id, model_name, provider, question, category, sql,
               t.get("db_bytes_result_payload")))
             log_id = cur.fetchone()[0]
             conn.commit()
+        falliti = persistence_state.registra_successo()
+        if falliti:
+            # Il segnale di recupero conta quanto quello di guasto: senza, non
+            # si sa mai se il problema e' ancora in corso.
+            logger.info("Persistenza su query_log ripristinata dopo %d fallimenti consecutivi.",
+                        falliti)
         return log_id
     except Exception as e:
-        logger.warning("Scrittura su query_log fallita (il file .txt resta comunque disponibile): %s", e)
+        classificazione = persistence_state.registra_fallimento(e)
+        if persistence_state.deve_segnalare():
+            logger.error(
+                "Scrittura su query_log FALLITA — genere: %s, eccezione: %s — %s. "
+                "Il file .txt resta disponibile.%s",
+                classificazione, type(e).__name__, e, _cosa_guardare(classificazione))
+        elif persistence_state.deve_riepilogare():
+            s = persistence_state.istantanea()
+            logger.warning(
+                "Persistenza su query_log ancora fallita: %d volte consecutive (genere: %s).",
+                s["fallimenti_consecutivi"], s["classificazione"])
         return None
 
 
@@ -66,13 +107,33 @@ def update_log_filename(log_id, filename):
             cur.execute("UPDATE query_log SET log_filename=%s WHERE id=%s", (filename, log_id))
             conn.commit()
     except Exception as e:
-        logger.debug("update_log_filename fallito: %s", e)
+        # Era a DEBUG, cioe' invisibile con FLASK_DEBUG=false, che e' la
+        # configurazione normale. Non viene registrato fra i fallimenti di
+        # persistenza: la riga su query_log ESISTE, e' solo rimasta senza il
+        # nome del file. Record degradato, non perso.
+        logger.warning("Aggiornamento di log_filename sulla riga %s non riuscito (%s): %s",
+                       log_id, type(e).__name__, e)
+
+
+def _riga_log_id(log_id, persistenza):
+    """Riga "Log ID" del file di sessione.
+
+    `N/A` si legge come "non applicabile", non come "la scrittura e' fallita":
+    e' la differenza che oggi, per le 165 esecuzioni di luglio, non permette di
+    sapere quali manchino dal database. Quando l'esito e' noto lo si dice; dove
+    non lo e' — nel ramo di errore DB il file viene scritto PRIMA della
+    scrittura sul database — `N/A` resta la risposta onesta.
+    """
+    if persistenza and persistenza.get("ok") is False:
+        return "Log ID       : NON SALVATO SU DATABASE"
+    return f"Log ID       : {log_id or 'N/A'}"
 
 
 def save_log_file(session_id, question, model_name, provider, category, sql, rows,
                    nl_response, latency_sql, latency_db, latency_nl, rows_count,
                    tokens_prompt=0, tokens_completion=0, tokens_total=0,
-                   log_id=None, error=None, truncated=False, transfer=None):
+                   log_id=None, error=None, truncated=False, transfer=None,
+                   persistenza=None):
     ts = datetime.now()
     ts_str = ts.strftime("%Y%m%d_%H%M%S")
     filename = f"{ts_str}_{slugify(question)}.txt"
@@ -80,7 +141,7 @@ def save_log_file(session_id, question, model_name, provider, category, sql, row
     sep = "=" * 70
     lines = [
         sep, "LYNX — Industrial Network Intelligence · SESSION LOG", sep,
-        f"Log ID       : {log_id or 'N/A'}",
+        _riga_log_id(log_id, persistenza),
         f"Session ID   : {session_id}",
         f"Timestamp    : {ts.strftime('%Y-%m-%d %H:%M:%S')}",
         f"Modello      : {model_name}",
@@ -100,6 +161,14 @@ def save_log_file(session_id, question, model_name, provider, category, sql, row
         f"Token completion : {tokens_completion}",
         f"Token totali     : {tokens_total}",
     ]
+    if persistenza and persistenza.get("ok") is False:
+        lines += [
+            "",
+            "[ PERSISTENZA DB ]",
+            "Esito           : FALLITA — questa esecuzione NON e' su query_log",
+            f"Genere          : {persistenza.get('classificazione') or 'n/d'}",
+            f"Errore          : {persistenza.get('errore') or 'n/d'}",
+        ]
     if transfer:
         def _b(chiave):
             v = transfer.get(chiave)

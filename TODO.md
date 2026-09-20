@@ -225,7 +225,7 @@ Che sia un effetto collaterale e non una scelta lo dicono quattro indizi:
 Chi analizzasse le due cartelle senza deduplicare gonfierebbe il corpus di
 1,6× e falserebbe ogni calcolo di consenso fra modelli.
 
-### Deriva di formato dei log: siamo alla terza variante
+### Deriva di formato dei log: siamo alla quarta variante
 
 I file `.txt` non hanno un formato stabile. Le varianti finora:
 
@@ -234,13 +234,21 @@ I file `.txt` non hanno un formato stabile. Le varianti finora:
 2. **con dettaglio** — aggiunta della sezione `DETTAGLIO PER TURNO` (dal
    4 luglio 2026);
 3. **con trasferimenti** — aggiunta del blocco `[ TRASFERIMENTI ]` nei session
-   log (settembre 2026, tappa 3 dei transfer rate).
+   log (settembre 2026);
+4. **con persistenza** — aggiunta del blocco `[ PERSISTENZA DB ]` e della riga
+   `Log ID : NON SALVATO SU DATABASE` (settembre 2026).
 
 Ogni variante costringe ad aggiornare qualunque parser scritto sul corpus, e i
 file vecchi restano nel formato in cui sono nati: un'analisi che copra tutto il
-corpus deve gestire tutte le varianti contemporaneamente. Da tenere presente
-prima di aggiungere altri campi ai log — e un argomento in più a favore di un
-formato macchina (JSON Lines) affiancato al `.txt` leggibile.
+corpus deve gestire tutte le varianti contemporaneamente.
+
+**Quattro varianti in tre mesi dicono che il formato testuale non regge come
+fonte dati.** Vale la pena valutare un log in **formato macchina — JSON Lines —
+affiancato** al `.txt` leggibile: una riga JSON per esecuzione, con gli stessi
+campi, versionata da un campo `schema_version`. Il `.txt` resta per chi legge,
+il `.jsonl` diventa la fonte per chi analizza, e aggiungere un campo smette di
+essere un evento. Da valutare, non ancora deciso: costa una scrittura in più
+per esecuzione e una seconda cosa da tenere allineata.
 
 ### Latenze storiche sottostimate sui retry
 

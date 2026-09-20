@@ -105,6 +105,7 @@ def run_oneshot_benchmark(question, model_ids, system_prompt):
                 final_sql, rows, exp["nl_response"], result["latency_sql"], latency_db, exp["latency_ms"],
                 len(rows), tokens_prompt, tokens_completion, tokens_prompt + tokens_completion,
                 log_id, truncated=truncated, transfer=trasferimento,
+                persistenza=logsvc.esito_persistenza(log_id),
             )
             result["log_id"], result["log_filename"] = log_id, fname
             logsvc.update_log_filename(log_id, fname)

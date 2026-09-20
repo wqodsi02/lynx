@@ -122,8 +122,15 @@ def azzera():
         _stato.update(_stato_iniziale())
 
 
-def registra_successo():
+def registra_successo() -> int:
+    """Registra una scrittura riuscita e ritorna quanti fallimenti consecutivi
+    la precedevano.
+
+    Il conteggio serve al segnale di ripristino: "persistenza ripristinata" da
+    solo non distingue un singolo intoppo da tre mesi di guasto.
+    """
     with _lock:
+        falliti = _stato["fallimenti_consecutivi"]
         _stato.update({
             "ok": True,
             "classificazione": None,
@@ -135,6 +142,22 @@ def registra_successo():
             # nuova, non la ripetizione della precedente.
             "segnalato": False,
         })
+    return falliti
+
+
+def deve_riepilogare() -> bool:
+    """True quando una serie di fallimenti raggiunge un multiplo della cadenza.
+
+    Da chiamare una volta per fallimento. Non consuma nulla: si legge dal
+    contatore, cosi' il comportamento e' verificabile sul contatore stesso e
+    non sul framework di logging.
+    """
+    cadenza = settings.PERSISTENZA_RIEPILOGO_OGNI
+    if cadenza <= 0:
+        return False
+    with _lock:
+        n = _stato["fallimenti_consecutivi"]
+    return n > 0 and n % cadenza == 0
 
 
 def registra_fallimento(eccezione) -> str:

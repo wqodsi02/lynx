@@ -176,7 +176,8 @@ def execute_and_explain():
         fname = logsvc.save_log_file(session_id, question, model["name"], model["provider"], category,
                                       sql, rows, exp["nl_response"], lat_sql, lat_db, exp["latency_ms"],
                                       len(rows), tokens_prompt, tokens_completion, tokens_total,
-                                      log_id, truncated=truncated, transfer=trasferimento)
+                                      log_id, truncated=truncated, transfer=trasferimento,
+                                      persistenza=logsvc.esito_persistenza(log_id))
         logsvc.update_log_filename(log_id, fname)
 
         # Aggiorna la memoria conversazionale SOLO ora che il turno è completo.

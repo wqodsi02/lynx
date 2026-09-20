@@ -92,6 +92,10 @@ class Settings:
     # un allarme grave quando supera una delle due, quella che arriva prima.
     PERSISTENZA_FALLIMENTI_PER_ALLARME = int(os.getenv("PERSISTENZA_FALLIMENTI_PER_ALLARME", "5"))
     PERSISTENZA_MINUTI_PER_ALLARME = int(os.getenv("PERSISTENZA_MINUTI_PER_ALLARME", "10"))
+    # Ogni quanti fallimenti consecutivi ripetere il riepilogo in console.
+    # Serve a non far sparire una serie lunga dopo il primo messaggio,
+    # senza tornare a un errore per ogni scrittura.
+    PERSISTENZA_RIEPILOGO_OGNI = int(os.getenv("PERSISTENZA_RIEPILOGO_OGNI", "25"))
     CONVERSATION_MAX_TURNS = int(os.getenv("CONVERSATION_MAX_TURNS", "20"))
     CONVERSATION_TTL_MINUTES = int(os.getenv("CONVERSATION_TTL_MINUTES", "240"))
     DEBUG = os.getenv("FLASK_DEBUG", "false").lower() == "true"
